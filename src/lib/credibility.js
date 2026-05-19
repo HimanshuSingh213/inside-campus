@@ -17,35 +17,49 @@ export function hasInstitutionalEmail(email = "") {
 }
 
 export function calculateCredibility(user) {
-  const verifiedPosts = Number(user.verifiedPosts) || 0;
-  const totalPosts = Number(user.totalPosts) || 0;
+  const verifiedPosts = Math.max(0, Number(user.verifiedPosts) || 0);
+  const totalPosts = Math.max(0, Number(user.totalPosts) || 0);
   const year = getYearNumber(user.year);
+
+  // 1. Identity & Institution Trust (Base Score)
+  const baseScore = user.verifiedInstitutionalEmail ? 65 : 40;
+
+  // 2. Academic Seniority Modifier
+  let academicModifier = 0;
+  if (year === 1) academicModifier = 0;
+  else if (year === 2) academicModifier = 5;
+  else if (year === 3) academicModifier = 10;
+  else if (year >= 4) academicModifier = 15;
+
+  const credentialTrust = baseScore + academicModifier;
 
   let score = 0;
 
-  if (totalPosts >= 3) {
-    score = (verifiedPosts / totalPosts) * 100;
-  }
-
-  if (user.verifiedInstitutionalEmail) {
-    score = score + 5;
-  }
-
-  if (year >= 3) {
-    score = score + 5;
+  // 3. Blended Contribution Performance
+  if (totalPosts === 0) {
+    score = credentialTrust;
+  } else if (totalPosts < 3) {
+    // Reward verified posts without penalizing unverified posts
+    score = credentialTrust + (verifiedPosts * 5);
+  } else {
+    // 3 or more posts: blend credential trust and post accuracy (40% credentials, 60% verification rate)
+    const verificationTrust = (verifiedPosts / totalPosts) * 100;
+    score = (0.4 * credentialTrust) + (0.6 * verificationTrust);
   }
 
   score = Math.round(score);
-  score = Math.min(score, 100);
+  score = Math.max(0, Math.min(score, 100));
 
   return score;
 }
 
+
 export function getContributorBadges(user) {
   const badges = [];
   const year = getYearNumber(user.year);
+  const totalPosts = Math.max(0, Number(user.totalPosts) || 0);
 
-  if (Number(user.totalPosts) < 3) {
+  if (totalPosts < 3) {
     badges.push("New Contributor");
   }
 

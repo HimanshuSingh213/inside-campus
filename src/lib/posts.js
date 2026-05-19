@@ -215,10 +215,25 @@ export async function deletePost(postId, userId) {
     throw new Error("You do not have permission to delete this post.");
   }
 
-  await deleteDoc(postRef);
+  await updateDoc(postRef, {
+    deleted: true,
+  });
 
   const userRef = doc(db, "users", userId);
-  await updateDoc(userRef, {
-    totalPosts: increment(-1),
-  });
+  const userSnapshot = await getDoc(userRef);
+  if (userSnapshot.exists()) {
+    const userData = userSnapshot.data();
+    const newTotalPosts = Math.max(0, Number(userData.totalPosts || 0) - 1);
+    const updatedUser = {
+      ...userData,
+      totalPosts: newTotalPosts,
+    };
+    const trustFields = buildTrustFields(updatedUser);
+
+    await updateDoc(userRef, {
+      totalPosts: newTotalPosts,
+      credibilityScore: trustFields.credibilityScore,
+      badges: trustFields.badges,
+    });
+  }
 }

@@ -12,6 +12,9 @@ export async function getDashboardPosts() {
 
   for (const postDoc of postsSnapshot.docs) {
     const postData = postDoc.data();
+    if (postData.deleted === true) {
+      continue;
+    }
     const contributor = await getContributor(postData.createdBy);
 
     posts.push({
@@ -24,7 +27,7 @@ export async function getDashboardPosts() {
       contributorName: contributor.name,
       contributorRole: contributor.role,
       creatorYear: Number(postData.creatorYear || 1),
-      credibilityScore: Number(postData.creatorCredibility || contributor.credibilityScore || 0),
+      credibilityScore: Number(contributor.credibilityScore || postData.creatorCredibility || 0),
       verificationCount: Number(postData.verificationCount || 0),
       verified: postData.verified === true,
       deadline: postData.deadline || "",
@@ -47,6 +50,9 @@ export async function getUserPosts(userId) {
   for (const postDoc of postsSnapshot.docs) {
     const postData = postDoc.data();
     if (postData.createdBy === userId) {
+      if (postData.deleted === true) {
+        continue;
+      }
       const contributor = await getContributor(postData.createdBy);
       posts.push({
         id: postDoc.id,
@@ -58,7 +64,7 @@ export async function getUserPosts(userId) {
         contributorName: contributor.name,
         contributorRole: contributor.role,
         creatorYear: Number(postData.creatorYear || 1),
-        credibilityScore: Number(postData.creatorCredibility || contributor.credibilityScore || 0),
+        credibilityScore: Number(contributor.credibilityScore || postData.creatorCredibility || 0),
         verificationCount: Number(postData.verificationCount || 0),
         verified: postData.verified === true,
         deadline: postData.deadline || "",
@@ -79,6 +85,9 @@ export async function getTrendingOpportunities() {
 
   postsSnapshot.forEach(function (postDoc) {
     const postData = postDoc.data();
+    if (postData.deleted === true) {
+      return;
+    }
 
     trendingPosts.push({
       id: postDoc.id,
@@ -104,6 +113,9 @@ export async function getUpcomingDeadlines() {
 
   postsSnapshot.forEach(function (postDoc) {
     const postData = postDoc.data();
+    if (postData.deleted === true) {
+      return;
+    }
 
     if (!postData.deadline) {
       return;
@@ -230,7 +242,8 @@ async function cleanupExpiredPosts() {
 
     const batch = writeBatch(db);
     expiredSnapshot.docs.forEach((postDoc) => {
-      batch.delete(postDoc.ref);
+      // Soft-delete to prevent Firestore delete rule permission errors
+      batch.update(postDoc.ref, { deleted: true });
       const postData = postDoc.data();
       if (postData.createdBy) {
         const userRef = doc(db, "users", postData.createdBy);
