@@ -30,11 +30,11 @@ export default function RegisterPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        router.push("/dashboard");
+        window.location.href = "/dashboard";
       }
     });
     return () => unsubscribe();
-  }, [router]);
+  }, []);
 
   function updateField(fieldName, value) {
     setFormData(function (oldFormData) {
@@ -91,7 +91,8 @@ export default function RegisterPage() {
     try {
       setIsLoading(true);
       await registerUser(formData);
-      router.push("/dashboard");
+      sessionStorage.setItem("justLoggedIn", "true");
+      window.location.href = "/dashboard";
     } catch (registerError) {
       setError(registerError.message || "Could not create your account. Please try again.");
     } finally {
@@ -259,7 +260,14 @@ function PasswordField({ label, name, value, showPassword, onTogglePassword, onC
         />
         <button
           type="button"
-          onClick={onTogglePassword}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onTogglePassword();
+          }}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            onTogglePassword();
+          }}
           className="rounded-lg px-3 py-1.5 text-xs font-semibold text-text/55 transition hover:bg-text/5 hover:text-text"
         >
           {showPassword ? "Hide" : "Show"}

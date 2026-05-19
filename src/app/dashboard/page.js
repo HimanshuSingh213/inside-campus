@@ -12,7 +12,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { verifyPost } from "@/lib/posts";
+import { verifyPost, deletePost } from "@/lib/posts";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -22,9 +22,9 @@ import {
   Briefcase,
   Bookmark,
   User,
-  Bell,
   Star,
   LogOut,
+  Trash2,
 } from "lucide-react";
 
 const filters = ["All", "Urgent", "Verified", "Internship", "Scholarship"];
@@ -50,6 +50,9 @@ export default function DashboardPage() {
   useEffect(function loadAuth() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("justLoggedIn");
+        }
         try {
           const userRef = doc(db, "users", user.uid);
           const userSnap = await getDoc(userRef);
@@ -63,8 +66,11 @@ export default function DashboardPage() {
           setCurrentUser({ uid: user.uid, name: user.displayName || user.email });
         }
       } else {
-        setCurrentUser(null);
-        router.push("/login");
+        const justLoggedIn = typeof window !== "undefined" ? sessionStorage.getItem("justLoggedIn") : null;
+        if (!justLoggedIn) {
+          setCurrentUser(null);
+          router.push("/login");
+        }
       }
       setAuthLoading(false);
     });
@@ -166,6 +172,24 @@ export default function DashboardPage() {
     });
   }
 
+  async function handleDelete(postId) {
+    if (!isLoggedIn) return;
+    
+    const confirmDelete = window.confirm("Are you sure you want to delete this post?");
+    if (!confirmDelete) return;
+
+    try {
+      await deletePost(postId, currentUser.uid);
+      setPosts((old) => old.filter((p) => p.id !== postId));
+      setUserPosts((old) => old.filter((p) => p.id !== postId));
+      setTrendingItems((old) => old.filter((p) => p.id !== postId));
+      setDeadlineItems((old) => old.filter((p) => p.id !== postId));
+    } catch (error) {
+      console.error("Delete failed:", error);
+      alert(error.message || "Failed to delete post.");
+    }
+  }
+
   const visiblePosts = getVisiblePosts({
     posts,
     activeSection,
@@ -206,6 +230,8 @@ export default function DashboardPage() {
               onVerify={handleVerify}
               onSave={savePost}
               savedPostIds={savedPostIds}
+              onDelete={handleDelete}
+              currentUser={currentUser}
             />
           ) : (
             <>
@@ -224,6 +250,8 @@ export default function DashboardPage() {
                 savedPostIds={savedPostIds}
                 onVerify={handleVerify}
                 onSave={savePost}
+                onDelete={handleDelete}
+                currentUser={currentUser}
               />
 
               {activeSection === "Home" ? (
@@ -247,7 +275,7 @@ export default function DashboardPage() {
   );
 }
 
-function ProfileView({ user, userPosts, onVerify, onSave, savedPostIds }) {
+function ProfileView({ user, userPosts, onVerify, onSave, savedPostIds, onDelete, currentUser }) {
   if (!user) return null;
 
   return (
@@ -332,6 +360,8 @@ function ProfileView({ user, userPosts, onVerify, onSave, savedPostIds }) {
           savedPostIds={savedPostIds}
           onVerify={onVerify}
           onSave={onSave}
+          onDelete={onDelete}
+          currentUser={currentUser}
         />
       </div>
     </div>
@@ -378,9 +408,6 @@ function Navbar({ currentUser, searchText, onSearchChange, onSectionChange }) {
 
         {isLoggedIn ? (
           <div className="flex items-center gap-3">
-            <button className="hidden rounded-xl border border-secondary/25 bg-text/[0.035] px-3 py-2 text-sm text-text/70 transition hover:border-primary/40 hover:text-text sm:block">
-              Notifications
-            </button>
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -433,7 +460,7 @@ function Navbar({ currentUser, searchText, onSearchChange, onSectionChange }) {
 
 function Sidebar({ activeSection, isLoggedIn, isSenior, onSectionChange }) {
   const basicItems = ["Home", "Trending", "Scholarships", "Internships"];
-  const userItems = ["Saved", "Profile", "Notifications"];
+  const userItems = ["Saved", "Profile"];
 
   return (
     <aside className="sticky top-[76px] hidden h-[calc(100vh-96px)] w-60 shrink-0 flex-col justify-between rounded-2xl border border-secondary/20 bg-text/2.5 p-3 lg:flex">
@@ -468,7 +495,7 @@ function Sidebar({ activeSection, isLoggedIn, isSenior, onSectionChange }) {
       </div>
 
       <div className="space-y-3">
-        {isSenior ? (
+        {isLoggedIn ? (
           <Link
             href="/submit"
             className="flex h-11 items-center justify-center rounded-xl bg-primary text-sm font-semibold text-background shadow-lg shadow-primary/15 transition hover:opacity-90"
@@ -542,7 +569,7 @@ function MobileNavigation({ activeSection, isLoggedIn, isSenior, onSectionChange
         </button>
       ) : null}
 
-      {isSenior ? (
+      {isLoggedIn ? (
         <Link
           href="/submit"
           className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-background"
@@ -602,7 +629,7 @@ function FeedHeader({ activeSection, activeFilter, onFilterChange, isLoggedIn })
   );
 }
 
-function Feed({ posts, loading, error, isLoggedIn, savedPostIds, onVerify, onSave }) {
+function Feed({ posts, loading, error, isLoggedIn, savedPostIds, onVerify, onSave, onDelete, currentUser }) {
   if (loading) {
     return (
       <div className="rounded-2xl border border-secondary/25 bg-text/[0.035] p-6 text-sm text-text/60">
@@ -641,6 +668,8 @@ function Feed({ posts, loading, error, isLoggedIn, savedPostIds, onVerify, onSav
             isSaved={savedPostIds.includes(post.id)}
             onVerify={onVerify}
             onSave={onSave}
+            onDelete={onDelete}
+            currentUser={currentUser}
           />
         );
       })}
@@ -648,7 +677,7 @@ function Feed({ posts, loading, error, isLoggedIn, savedPostIds, onVerify, onSav
   );
 }
 
-function InfoCard({ post, isLoggedIn, isSaved, onVerify, onSave }) {
+function InfoCard({ post, isLoggedIn, isSaved, onVerify, onSave, onDelete, currentUser }) {
   const important = post.urgency === "High" || post.urgency === "Critical";
 
   return (
@@ -667,6 +696,11 @@ function InfoCard({ post, isLoggedIn, isSaved, onVerify, onSave }) {
         <span className="rounded-full border border-secondary/25 bg-background/45 px-3 py-1 text-text/60">
           {post.category}
         </span>
+        {post.deadline ? (
+          <span className="rounded-full border border-accent/20 bg-accent/5 px-3 py-1 font-medium text-accent/90">
+            Deadline: {post.deadline}
+          </span>
+        ) : null}
         <span className="ml-auto text-text/45">{post.createdAt}</span>
       </div>
 
@@ -720,6 +754,15 @@ function InfoCard({ post, isLoggedIn, isSaved, onVerify, onSave }) {
           >
             {isSaved ? "Saved" : "Save"}
           </button>
+          {currentUser && currentUser.uid === post.createdBy ? (
+            <button
+              onClick={() => onDelete(post.id)}
+              className="flex items-center justify-center rounded-xl border border-accent/20 bg-accent/5 px-2 py-2 text-accent transition hover:bg-accent/10"
+              title="Delete post"
+            >
+              <Trash2 size={16} />
+            </button>
+          ) : null}
         </div>
       </div>
     </article>
@@ -783,6 +826,20 @@ function DeadlineWidget({ items, loading }) {
 
 function getVisiblePosts({ posts, activeSection, activeFilter, searchText, savedPostIds }) {
   let visiblePosts = posts;
+
+  // Filter out expired posts
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${day}`;
+
+  visiblePosts = visiblePosts.filter(function (post) {
+    if (!post.deadline) {
+      return true;
+    }
+    return post.deadline >= todayStr;
+  });
 
   if (activeSection === "Trending") {
     visiblePosts = [...visiblePosts].sort(function (firstPost, secondPost) {
@@ -851,6 +908,22 @@ function getVisiblePosts({ posts, activeSection, activeFilter, searchText, saved
     });
   }
 
+  if (activeSection !== "Trending") {
+    visiblePosts = [...visiblePosts].sort(function (firstPost, secondPost) {
+      // 1. Prioritize verified posts
+      if (firstPost.verified !== secondPost.verified) {
+        return secondPost.verified ? 1 : -1;
+      }
+
+      // 2. Prioritize by creator's year (4 > 3 > 2 > 1)
+      if (firstPost.creatorYear !== secondPost.creatorYear) {
+        return secondPost.creatorYear - firstPost.creatorYear;
+      }
+
+      return 0;
+    });
+  }
+
   return visiblePosts;
 }
 
@@ -875,10 +948,6 @@ function getSectionTitle(activeSection) {
     return "Profile Overview";
   }
 
-  if (activeSection === "Notifications") {
-    return "Notifications";
-  }
-
   return "Today's Updates";
 }
 
@@ -891,7 +960,6 @@ function Icon({ name }) {
     internships: Briefcase,
     saved: Bookmark,
     profile: User,
-    notifications: Bell,
   };
 
   const LucideIcon = icons[name] || Home;

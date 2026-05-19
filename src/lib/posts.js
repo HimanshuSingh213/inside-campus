@@ -7,8 +7,9 @@ import {
   orderBy,
   query,
   runTransaction,
-  serverTimestamp,
   updateDoc,
+  deleteDoc,
+  increment,
 } from "firebase/firestore";
 import { buildTrustFields } from "./credibility";
 import { auth, db } from "./firebase";
@@ -193,4 +194,30 @@ function makeTagsArray(tags) {
     .filter(function (tag) {
       return tag !== "";
     });
+}
+
+export async function deletePost(postId, userId) {
+  if (!auth.currentUser || auth.currentUser.uid !== userId) {
+    throw new Error("You must be logged in to delete a post.");
+  }
+
+  const postRef = doc(db, "posts", postId);
+  const postSnapshot = await getDoc(postRef);
+
+  if (!postSnapshot.exists()) {
+    throw new Error("Post not found.");
+  }
+
+  const postData = postSnapshot.data();
+
+  if (postData.createdBy !== userId) {
+    throw new Error("You do not have permission to delete this post.");
+  }
+
+  await deleteDoc(postRef);
+
+  const userRef = doc(db, "users", userId);
+  await updateDoc(userRef, {
+    totalPosts: increment(-1),
+  });
 }

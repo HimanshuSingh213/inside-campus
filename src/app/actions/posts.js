@@ -1,8 +1,10 @@
 
-import { collection, doc, getDoc, getDocs, limit, orderBy, query } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, writeBatch, where, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export async function getDashboardPosts() {
+  cleanupExpiredPosts().catch(console.error);
+
   const postsCollection = collection(db, "posts");
   const postsQuery = query(postsCollection, orderBy("createdAt", "desc"), limit(20));
   const postsSnapshot = await getDocs(postsQuery);
@@ -27,6 +29,7 @@ export async function getDashboardPosts() {
       verified: postData.verified === true,
       deadline: postData.deadline || "",
       createdAt: formatCreatedAt(postData.createdAt),
+      createdBy: postData.createdBy,
     });
   }
 
@@ -60,6 +63,7 @@ export async function getUserPosts(userId) {
         verified: postData.verified === true,
         deadline: postData.deadline || "",
         createdAt: formatCreatedAt(postData.createdAt),
+        createdBy: postData.createdBy,
       });
     }
   }
@@ -92,10 +96,20 @@ export async function getUpcomingDeadlines() {
   const postsSnapshot = await getDocs(postsQuery);
   const deadlines = [];
 
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${day}`;
+
   postsSnapshot.forEach(function (postDoc) {
     const postData = postDoc.data();
 
     if (!postData.deadline) {
+      return;
+    }
+
+    if (postData.deadline < todayStr) {
       return;
     }
 
@@ -198,4 +212,37 @@ function formatDeadline(deadline) {
     month: "short",
     day: "numeric",
   });
+}
+
+async function cleanupExpiredPosts() {
+  try {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+
+    const postsCollection = collection(db, "posts");
+    const expiredQuery = query(postsCollection, where("deadline", "<", todayStr));
+    const expiredSnapshot = await getDocs(expiredQuery);
+
+    if (expiredSnapshot.empty) return;
+
+    const batch = writeBatch(db);
+    expiredSnapshot.docs.forEach((postDoc) => {
+      batch.delete(postDoc.ref);
+      const postData = postDoc.data();
+      if (postData.createdBy) {
+        const userRef = doc(db, "users", postData.createdBy);
+        batch.update(userRef, {
+          totalPosts: increment(-1),
+        });
+      }
+    });
+
+    await batch.commit();
+    console.log(`Cleaned up ${expiredSnapshot.size} expired posts from Firestore.`);
+  } catch (error) {
+    console.error("Expired posts cleanup failed:", error);
+  }
 }
