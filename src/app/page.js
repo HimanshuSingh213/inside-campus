@@ -1,6 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import {
+  Building2,
+  ShieldCheck,
+  Award,
+  BellRing,
+  Network,
+  GraduationCap,
+  Users,
+  Medal,
+} from "lucide-react";
 
 const NAV_LINKS = [
   { label: "Features", href: "#features" },
@@ -12,66 +26,65 @@ const FEATURES = [
   {
     title: "College-Specific Feeds",
     desc: "Every insight is tagged to your institution, branch, and year. No noise — only what's relevant to your academic context.",
-    icon: (
-      <path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
-    ),
+    icon: Building2,
   },
   {
     title: "Peer Verification",
     desc: "Content is reviewed by trusted seniors before it surfaces. Community trust replaces bureaucratic gatekeeping.",
-    icon: (
-      <path d="M12 11c2.21 0 4-1.79 4-4S14.21 3 12 3 8 4.79 8 8s1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-    ),
+    icon: ShieldCheck,
   },
   {
     title: "Credibility Scoring",
     desc: "Contributors earn reputation over time. The most reliable seniors rise to the top — so you know who to trust.",
-    icon: (
-      <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
-    ),
+    icon: Award,
   },
   {
     title: "Urgent Alerts",
     desc: "Scholarship portals. Referral windows. Application cutoffs. Get notified before the opportunity quietly disappears.",
-    icon: (
-      <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
-    ),
+    icon: BellRing,
   },
   {
     title: "Branch-Tagged Insights",
     desc: "CS, ECE, MBA, Civil — filter insights by discipline. Stop wading through content meant for another department.",
-    icon: (
-      <path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z" />
-    ),
+    icon: Network,
   },
   {
     title: "Senior Contributor Network",
     desc: "Structured mentorship at scale. Seniors document what they wish they knew — so juniors don't start from zero.",
-    icon: (
-      <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-    ),
+    icon: GraduationCap,
   },
 ];
 
 const WHY_CARDS = [
   {
-    icon: "✦",
+    icon: Users,
     title: "Built for first-generation students",
     desc: "No alumni network? No senior connections? Inside Campus levels the playing field — giving every student access to the same insider knowledge.",
   },
   {
-    icon: "◈",
+    icon: ShieldCheck,
     title: "Community-verified intelligence",
     desc: "Every post is reviewed by peers. Credibility scores surface the most reliable voices so misinformation never reaches you.",
   },
   {
-    icon: "◎",
+    icon: Medal,
     title: "Trust through credibility scoring",
     desc: "Contributors build reputation over time. The platform rewards accuracy and experience — not follower counts.",
   },
 ];
 
 export default function Home() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        router.push("/dashboard");
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-background font-sans text-text">
 
@@ -101,13 +114,13 @@ export default function Home() {
 
           <div className="flex items-center gap-3 text-sm font-medium">
             <Link
-              href="/auth/login"
+              href="/login"
               className="text-text/70 hover:text-text transition-colors duration-200 px-3 py-1.5"
             >
               Login
             </Link>
             <Link
-              href="/auth/signup"
+              href="/register"
               className="bg-primary text-background px-5 py-2 rounded-full font-semibold hover:brightness-110 transition-all duration-200 shadow-lg shadow-primary/25"
             >
               Register
@@ -140,13 +153,13 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2 animate-fade-up-delay-2">
             <Link
-              href="/auth/signup"
+              href="/register"
               className="bg-primary text-background px-8 py-3.5 rounded-full font-semibold text-sm hover:brightness-110 transition-all duration-200 shadow-lg shadow-primary/30"
             >
               Explore Intelligence
             </Link>
             <Link
-              href="/auth/login"
+              href="/login"
               className="px-8 py-3.5 rounded-full text-text/80 font-semibold text-sm border border-white/[0.1] hover:bg-white/[0.05] hover:text-text transition-all duration-200"
             >
               Join the Network
@@ -300,9 +313,7 @@ export default function Home() {
             >
               <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-primary/0 group-hover:from-primary/[0.04] group-hover:to-transparent transition-all duration-500 rounded-2xl pointer-events-none" />
               <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-primary relative z-10 group-hover:border-primary/30 transition-colors duration-300">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  {f.icon}
-                </svg>
+                <f.icon size={20} strokeWidth={2} />
               </div>
               <div className="relative z-10">
                 <h3 className="text-base font-bold mb-2 group-hover:text-text transition-colors">{f.title}</h3>
@@ -348,7 +359,7 @@ export default function Home() {
               >
                 <div className="flex items-start gap-4">
                   <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-lg shrink-0">
-                    {card.icon}
+                    <card.icon size={18} strokeWidth={2.5} />
                   </div>
                   <div>
                     <h3 className="font-semibold text-sm mb-1 text-text/90">{card.title}</h3>
@@ -422,18 +433,18 @@ export default function Home() {
               for every student, at every college.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
-              <a
+              <Link
                 href="/register"
                 className="bg-primary text-background px-8 py-3.5 rounded-full font-bold text-sm hover:brightness-110 transition-all duration-200 shadow-xl shadow-primary/30 hover:scale-105 active:scale-95"
               >
                 Get Started
-              </a>
-              <a
-                href="#features"
+              </Link>
+              <Link
+                href="/login"
                 className="px-8 py-3.5 rounded-full text-text/70 font-semibold text-sm border border-white/[0.1] hover:bg-white/[0.05] hover:text-text transition-all duration-200"
               >
-                Explore Feed
-              </a>
+                Login
+              </Link>
             </div>
           </div>
         </div>

@@ -5,6 +5,8 @@ import { onAuthStateChanged } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { createPost } from "@/lib/posts";
+import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 
 const emptyForm = {
   title: "",
@@ -34,6 +36,7 @@ const urgencies = ["Low", "Medium", "High", "Critical"];
 const requiredFields = ["title", "description", "category", "college", "branch", "urgency"];
 
 export default function SubmitPage() {
+  const router = useRouter();
   const [form, setForm] = useState(emptyForm);
   const [touchedFields, setTouchedFields] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
@@ -43,12 +46,16 @@ export default function SubmitPage() {
 
   useEffect(function watchLoggedInUser() {
     const stopWatching = onAuthStateChanged(auth, function (user) {
-      setCurrentUser(user);
+      if (!user) {
+        router.push("/login");
+      } else {
+        setCurrentUser(user);
+      }
       setAuthLoading(false);
     });
 
     return stopWatching;
-  }, []);
+  }, [router]);
 
   const formIsValid = requiredFields.every(function (fieldName) {
     return form[fieldName].trim() !== "";
@@ -130,6 +137,13 @@ export default function SubmitPage() {
 
       <section className="mx-auto max-w-6xl px-5 py-10 sm:px-6 sm:py-14 lg:px-8">
         <header className="max-w-3xl">
+          <button 
+            onClick={() => router.back()} 
+            className="inline-flex items-center gap-2 mb-8 text-sm font-semibold text-text/50 transition-colors hover:text-text"
+          >
+            <ArrowLeft size={16} strokeWidth={2.5} />
+            Back to Dashboard
+          </button>
           <p className="mb-3 text-sm font-medium uppercase tracking-[0.18em] text-primary/80">
             Submit Update
           </p>

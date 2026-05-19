@@ -1,4 +1,3 @@
-"use server";
 
 import { collection, doc, getDoc, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -22,12 +21,47 @@ export async function getDashboardPosts() {
       tags: Array.isArray(postData.tags) ? postData.tags : [],
       contributorName: contributor.name,
       contributorRole: contributor.role,
+      creatorYear: Number(postData.creatorYear || 1),
       credibilityScore: Number(postData.creatorCredibility || contributor.credibilityScore || 0),
       verificationCount: Number(postData.verificationCount || 0),
       verified: postData.verified === true,
       deadline: postData.deadline || "",
       createdAt: formatCreatedAt(postData.createdAt),
     });
+  }
+
+  return posts;
+}
+
+export async function getUserPosts(userId) {
+  if (!userId) return [];
+
+  const postsCollection = collection(db, "posts");
+  const postsQuery = query(postsCollection, orderBy("createdAt", "desc"));
+  const postsSnapshot = await getDocs(postsQuery);
+  const posts = [];
+
+  for (const postDoc of postsSnapshot.docs) {
+    const postData = postDoc.data();
+    if (postData.createdBy === userId) {
+      const contributor = await getContributor(postData.createdBy);
+      posts.push({
+        id: postDoc.id,
+        title: postData.title || "",
+        description: postData.description || "",
+        category: postData.category || "",
+        urgency: postData.urgency || "Low",
+        tags: Array.isArray(postData.tags) ? postData.tags : [],
+        contributorName: contributor.name,
+        contributorRole: contributor.role,
+        creatorYear: Number(postData.creatorYear || 1),
+        credibilityScore: Number(postData.creatorCredibility || contributor.credibilityScore || 0),
+        verificationCount: Number(postData.verificationCount || 0),
+        verified: postData.verified === true,
+        deadline: postData.deadline || "",
+        createdAt: formatCreatedAt(postData.createdAt),
+      });
+    }
   }
 
   return posts;
@@ -117,6 +151,10 @@ function getContributorRole(badges) {
 
   if (badges.includes("Community Verified")) {
     return "Community Verified";
+  }
+
+  if (badges.includes("New Contributor")) {
+    return "New Contributor";
   }
 
   return "Community Contributor";

@@ -2,37 +2,79 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { logoutUser } from "@/lib/users";
 import {
   getDashboardPosts,
   getTrendingOpportunities,
   getUpcomingDeadlines,
+  getUserPosts,
 } from "@/app/actions/posts";
-
-// const mockUser = {
-//   name: "You",
-//   year: 3,
-//   role: "Senior Contributor",
-//   credibilityScore: 88,
-// };
-const mockUser = null;
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { verifyPost } from "@/lib/posts";
+import { useRouter } from "next/navigation";
+import {
+  Search,
+  Home,
+  TrendingUp,
+  Award,
+  Briefcase,
+  Bookmark,
+  User,
+  Bell,
+  Star,
+  LogOut,
+} from "lucide-react";
 
 const filters = ["All", "Urgent", "Verified", "Internship", "Scholarship"];
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [activeSection, setActiveSection] = useState("Home");
   const [activeFilter, setActiveFilter] = useState("All");
   const [posts, setPosts] = useState([]);
+  const [userPosts, setUserPosts] = useState([]);
   const [trendingItems, setTrendingItems] = useState([]);
   const [deadlineItems, setDeadlineItems] = useState([]);
   const [savedPostIds, setSavedPostIds] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [postsLoading, setPostsLoading] = useState(true);
   const [postsError, setPostsError] = useState("");
-  const currentUser = mockUser;
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const isLoggedIn = Boolean(currentUser);
-  const isSenior = isLoggedIn && Number(currentUser.year) >= 3;
+  const isSenior = isLoggedIn && Number(currentUser?.year) >= 3;
+
+  useEffect(function loadAuth() {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userRef = doc(db, "users", user.uid);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            setCurrentUser({ uid: user.uid, ...userSnap.data() });
+          } else {
+            setCurrentUser({ uid: user.uid, name: user.displayName || user.email });
+          }
+        } catch (error) {
+          console.error("Failed to load user profile:", error);
+          setCurrentUser({ uid: user.uid, name: user.displayName || user.email });
+        }
+      } else {
+        setCurrentUser(null);
+        router.push("/login");
+      }
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [router]);
 
   useEffect(function loadDashboardData() {
+    if (authLoading) return; // Wait until Firebase Auth is ready
+
     async function loadData() {
       try {
         setPostsLoading(true);
@@ -41,10 +83,12 @@ export default function DashboardPage() {
         const dashboardPosts = await getDashboardPosts();
         const trending = await getTrendingOpportunities();
         const deadlines = await getUpcomingDeadlines();
+        const myPosts = currentUser ? await getUserPosts(currentUser.uid) : [];
 
         setPosts(dashboardPosts);
         setTrendingItems(trending);
         setDeadlineItems(deadlines);
+        setUserPosts(myPosts);
       } catch (error) {
         setPostsError(error.message || "Could not load dashboard posts.");
       } finally {
@@ -53,25 +97,53 @@ export default function DashboardPage() {
     }
 
     loadData();
-  }, []);
+  }, [authLoading]);
 
-  function verifyPost(postId) {
+  async function handleVerify(postId) {
     if (!isLoggedIn) {
       return;
     }
 
-    setPosts((oldPosts) => {
-      return oldPosts.map((post) => {
-        if (post.id !== postId) {
-          return post;
-        }
+    try {
+      // Optimistic update
+      setPosts((oldPosts) =>
+        oldPosts.map((post) =>
+          post.id === postId ? { ...post, verificationCount: post.verificationCount + 1 } : post
+        )
+      );
+      setTrendingItems((oldItems) =>
+        oldItems.map((post) =>
+          post.id === postId ? { ...post, verificationCount: post.verificationCount + 1 } : post
+        )
+      );
+      setUserPosts((oldPosts) =>
+        oldPosts.map((post) =>
+          post.id === postId ? { ...post, verificationCount: post.verificationCount + 1 } : post
+        )
+      );
 
-        return {
-          ...post,
-          verificationCount: post.verificationCount + 1,
-        };
-      });
-    });
+      await verifyPost(postId, currentUser.uid);
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "Failed to verify post.");
+      
+      // Revert optimistic update
+      setPosts((oldPosts) =>
+        oldPosts.map((post) =>
+          post.id === postId ? { ...post, verificationCount: post.verificationCount - 1 } : post
+        )
+      );
+      setTrendingItems((oldItems) =>
+        oldItems.map((post) =>
+          post.id === postId ? { ...post, verificationCount: post.verificationCount - 1 } : post
+        )
+      );
+      setUserPosts((oldPosts) =>
+        oldPosts.map((post) =>
+          post.id === postId ? { ...post, verificationCount: post.verificationCount - 1 } : post
+        )
+      );
+    }
   }
 
   function savePost(postId) {
@@ -104,7 +176,12 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-background text-text">
-      <Navbar currentUser={currentUser} searchText={searchText} onSearchChange={setSearchText} />
+      <Navbar 
+        currentUser={currentUser} 
+        searchText={searchText} 
+        onSearchChange={setSearchText} 
+        onSectionChange={setActiveSection} 
+      />
 
       <div className="mx-auto flex max-w-[1440px] gap-6 px-4 py-5 sm:px-6 lg:px-8">
         <Sidebar
@@ -122,40 +199,161 @@ export default function DashboardPage() {
             onSectionChange={setActiveSection}
           />
 
-          <FeedHeader
-            activeSection={activeSection}
-            activeFilter={activeFilter}
-            onFilterChange={setActiveFilter}
-            isLoggedIn={isLoggedIn}
-          />
+          {activeSection === "Profile" ? (
+            <ProfileView
+              user={currentUser}
+              userPosts={userPosts}
+              onVerify={handleVerify}
+              onSave={savePost}
+              savedPostIds={savedPostIds}
+            />
+          ) : (
+            <>
+              <FeedHeader
+                activeSection={activeSection}
+                activeFilter={activeFilter}
+                onFilterChange={setActiveFilter}
+                isLoggedIn={isLoggedIn}
+              />
 
-          <Feed
-            posts={visiblePosts}
-            loading={postsLoading}
-            error={postsError}
-            isLoggedIn={isLoggedIn}
-            savedPostIds={savedPostIds}
-            onVerify={verifyPost}
-            onSave={savePost}
-          />
+              <Feed
+                posts={visiblePosts}
+                loading={postsLoading}
+                error={postsError}
+                isLoggedIn={isLoggedIn}
+                savedPostIds={savedPostIds}
+                onVerify={handleVerify}
+                onSave={savePost}
+              />
 
-          <div className="mt-6 grid gap-4 xl:hidden">
-            <TrendingWidget items={trendingItems} loading={postsLoading} />
-            <DeadlineWidget items={deadlineItems} loading={postsLoading} />
-          </div>
+              {activeSection === "Home" ? (
+                <div className="mt-6 grid gap-4 xl:hidden">
+                  <TrendingWidget items={trendingItems} loading={postsLoading} />
+                  <DeadlineWidget items={deadlineItems} loading={postsLoading} />
+                </div>
+              ) : null}
+            </>
+          )}
         </section>
 
-        <aside className="hidden w-[300px] shrink-0 space-y-4 xl:block">
-          <TrendingWidget items={trendingItems} loading={postsLoading} />
-          <DeadlineWidget items={deadlineItems} loading={postsLoading} />
-        </aside>
+        {activeSection === "Home" ? (
+          <aside className="hidden w-[300px] shrink-0 space-y-4 xl:block">
+            <TrendingWidget items={trendingItems} loading={postsLoading} />
+            <DeadlineWidget items={deadlineItems} loading={postsLoading} />
+          </aside>
+        ) : null}
       </div>
     </main>
   );
 }
 
-function Navbar({ currentUser, searchText, onSearchChange }) {
+function ProfileView({ user, userPosts, onVerify, onSave, savedPostIds }) {
+  if (!user) return null;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+      {/* Left Column */}
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-secondary/25 bg-text/[0.035] p-6 shadow-xl shadow-black/20">
+          <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
+            <div className="h-[72px] w-[72px] rounded-full bg-primary/20 text-2xl font-bold text-primary flex items-center justify-center mb-4 border-2 border-primary/30">
+              {getInitials(user.name)}
+            </div>
+            <h2 className="text-xl font-bold leading-tight">{user.name}</h2>
+            <p className="text-sm text-text/55 mt-1 leading-relaxed">
+              {user.year ? `${user.year}${["1","2","3","4"].includes(String(user.year)) ? (String(user.year) === "1" ? "st" : String(user.year) === "2" ? "nd" : String(user.year) === "3" ? "rd" : "th") : ""} year` : "Year not set"} · {user.branch || "Branch not set"}
+              <br />
+              {user.college || "College not set"}
+            </p>
+          </div>
+
+          <div className="mt-8">
+            <div className="flex justify-between text-xs mb-2">
+              <span className="text-text/60">Credibility score</span>
+              <span className="font-bold">{user.credibilityScore || 0}%</span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-background/50 overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-1000"
+                style={{ width: `${user.credibilityScore || 0}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="mt-8 flex items-center justify-between border-t border-secondary/20 pt-6 px-1">
+            <div className="text-center">
+              <div className="text-base font-bold">{user.totalPosts || 0}</div>
+              <div className="text-[9px] text-text/50 uppercase tracking-widest mt-1 font-semibold">Posts</div>
+            </div>
+            <div className="text-center">
+              <div className="text-base font-bold">{user.verifiedPosts || 0}</div>
+              <div className="text-[9px] text-text/50 uppercase tracking-widest mt-1 font-semibold">Verified</div>
+            </div>
+            <div className="text-center">
+              <div className="text-base font-bold">{savedPostIds.length}</div>
+              <div className="text-[9px] text-text/50 uppercase tracking-widest mt-1 font-semibold">Saves</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-secondary/25 bg-text/[0.035] p-6 shadow-xl shadow-black/20">
+          <h3 className="text-[10px] font-bold text-text/50 uppercase tracking-widest mb-5">Reputation badges</h3>
+          <div className="space-y-5">
+            {(user.badges || []).map((badge) => (
+              <div key={badge} className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full border border-primary/20 bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <Award size={14} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-text/90">{badge}</div>
+                  <div className="text-[10px] text-text/50 mt-0.5">Earned milestone</div>
+                </div>
+              </div>
+            ))}
+            {!(user.badges && user.badges.length > 0) && (
+              <p className="text-sm text-text/50">No badges earned yet.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 mb-2 ml-1">
+          <Star className="text-primary" size={16} strokeWidth={2.5} />
+          <h2 className="text-sm font-bold tracking-tight">Contribution history</h2>
+        </div>
+
+        <Feed
+          posts={userPosts}
+          loading={false}
+          error=""
+          isLoggedIn={true}
+          savedPostIds={savedPostIds}
+          onVerify={onVerify}
+          onSave={onSave}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Navbar({ currentUser, searchText, onSearchChange, onSectionChange }) {
   const isLoggedIn = Boolean(currentUser);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const handleProfileClick = () => {
+    onSectionChange("Profile");
+    setDropdownOpen(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 border-b border-secondary/20 bg-background/85 backdrop-blur-xl">
@@ -183,18 +381,49 @@ function Navbar({ currentUser, searchText, onSearchChange }) {
             <button className="hidden rounded-xl border border-secondary/25 bg-text/[0.035] px-3 py-2 text-sm text-text/70 transition hover:border-primary/40 hover:text-text sm:block">
               Notifications
             </button>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/25 bg-primary/15 text-sm font-semibold text-primary">
-              {getInitials(currentUser.name)}
+            <div className="relative">
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/25 bg-primary/15 text-sm font-semibold text-primary transition hover:bg-primary/25 hover:shadow-lg hover:shadow-primary/20"
+              >
+                {getInitials(currentUser.name)}
+              </button>
+
+              {dropdownOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setDropdownOpen(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-48 rounded-xl border border-secondary/25 bg-background p-1 shadow-2xl shadow-black/40 z-50">
+                    <button
+                      onClick={handleProfileClick}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-text/80 transition hover:bg-white/[0.04] hover:text-text"
+                    >
+                      <User size={16} />
+                      Profile
+                    </button>
+                    <div className="my-1 h-px w-full bg-secondary/20" />
+                    <button
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-accent transition hover:bg-accent/10"
+                    >
+                      <LogOut size={16} />
+                      Logout
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         ) : (
           <div className="flex shrink-0 items-center gap-2">
-            <button className="rounded-xl border border-secondary/25 px-4 py-2 text-sm text-text/75 transition hover:border-primary/40 hover:text-text">
+            <Link href="/login" className="rounded-xl border border-secondary/25 px-4 py-2 text-sm text-text/75 transition hover:border-primary/40 hover:text-text">
               Login
-            </button>
-            <button className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90">
+            </Link>
+            <Link href="/register" className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90">
               Register
-            </button>
+            </Link>
           </div>
         )}
       </div>
@@ -347,26 +576,28 @@ function FeedHeader({ activeSection, activeFilter, onFilterChange, isLoggedIn })
         ) : null}
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        {filters.map(function (filter) {
-          const active = filter === activeFilter;
+      {activeSection === "Home" ? (
+        <div className="mt-5 flex flex-wrap gap-2">
+          {filters.map(function (filter) {
+            const active = filter === activeFilter;
 
-          return (
-            <button
-              key={filter}
-              onClick={() => onFilterChange(filter)}
-              className={
-                "rounded-full border px-4 py-2 text-sm transition " +
-                (active
-                  ? "border-primary/50 bg-primary/15 text-text"
-                  : "border-secondary/25 bg-background/45 text-text/58 hover:border-primary/35 hover:text-text")
-              }
-            >
-              {filter}
-            </button>
-          );
-        })}
-      </div>
+            return (
+              <button
+                key={filter}
+                onClick={() => onFilterChange(filter)}
+                className={
+                  "rounded-full border px-4 py-2 text-sm transition " +
+                  (active
+                    ? "border-primary/50 bg-primary/15 text-text"
+                    : "border-secondary/25 bg-background/45 text-text/58 hover:border-primary/35 hover:text-text")
+                }
+              >
+                {filter}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -470,9 +701,11 @@ function InfoCard({ post, isLoggedIn, isSaved, onVerify, onSave }) {
           <span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1.5 text-xs text-primary">
             {post.verificationCount} verifications
           </span>
-          <span className="rounded-full border border-secondary/25 bg-background/45 px-3 py-1.5 text-xs text-text/65">
-            {post.credibilityScore}% credibility
-          </span>
+          {post.credibilityScore > 0 ? (
+            <span className="rounded-full border border-secondary/25 bg-background/45 px-3 py-1.5 text-xs text-text/65">
+              {post.credibilityScore}% credibility
+            </span>
+          ) : null}
           <button
             disabled={!isLoggedIn}
             onClick={() => onVerify(post.id)}
@@ -623,15 +856,15 @@ function getVisiblePosts({ posts, activeSection, activeFilter, searchText, saved
 
 function getSectionTitle(activeSection) {
   if (activeSection === "Trending") {
-    return "Trending Updates";
+    return "Trending Now";
   }
 
   if (activeSection === "Scholarships") {
-    return "Scholarship Updates";
+    return "Scholarships";
   }
 
   if (activeSection === "Internships") {
-    return "Internship Updates";
+    return "Internship Opportunities";
   }
 
   if (activeSection === "Saved") {
@@ -651,30 +884,19 @@ function getSectionTitle(activeSection) {
 
 function Icon({ name }) {
   const icons = {
-    search: "M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z",
-    home: "M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9z",
-    trending: "M4 16l5-5 4 4 7-8M15 7h5v5",
-    scholarships: "M4 8l8-4 8 4-8 4-8-4zM6 11v4c2 2 10 2 12 0v-4",
-    internships: "M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M4 7h16v12H4V7zM9 7v12",
-    saved: "M6 4h12v17l-6-4-6 4V4z",
-    profile: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0",
-    notifications: "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4",
+    search: Search,
+    home: Home,
+    trending: TrendingUp,
+    scholarships: Award,
+    internships: Briefcase,
+    saved: Bookmark,
+    profile: User,
+    notifications: Bell,
   };
 
-  return (
-    <svg
-      aria-hidden="true"
-      className="h-4 w-4 shrink-0"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-      viewBox="0 0 24 24"
-    >
-      <path d={icons[name] || icons.home} />
-    </svg>
-  );
+  const LucideIcon = icons[name] || Home;
+
+  return <LucideIcon className="h-4 w-4 shrink-0" strokeWidth={1.8} />;
 }
 
 function getInitials(name) {
