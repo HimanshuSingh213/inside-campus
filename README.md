@@ -1,6 +1,6 @@
 # Inside Campus
 
-Inside Campus is a college intelligence platform where verified seniors share actionable academic and career insights with juniors and freshers.
+Inside Campus is a college opportunities platform where verified seniors share actionable academic and career insights with juniors and freshers.
 
 The platform focuses on solving the problem of hidden institutional knowledge in colleges such as:
 - internship timelines
@@ -23,7 +23,7 @@ The platform focuses on solving the problem of hidden institutional knowledge in
 
 # Core Features
 
-- College-specific intelligence feed
+- College-specific updates feed
 - Branch-tagged opportunity system
 - Senior contributor verification
 - Credibility scoring system

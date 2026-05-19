@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Eye, EyeOff, CheckCircle2, AlertCircle, Loader } from 'lucide-react';
 
 export default function SignupPage() {
-  const [hasMounted, setHasMounted] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -21,11 +20,6 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [validations, setValidations] = useState({});
-
-  // Ensure styled-jsx tags only evaluate fully on client side mount
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
 
   // Real-time validation patterns
   const validateEmail = (email) => {
@@ -146,11 +140,6 @@ export default function SignupPage() {
     formData.name && formData.email && formData.password && 
     formData.confirmPassword && formData.collegeName && 
     formData.branch && formData.year;
-
-  // Render an empty skeleton or background placeholder during the initial SSR render pass
-  if (!hasMounted) {
-    return <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#06030a' }} />;
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#06030a' }}>

@@ -83,7 +83,7 @@ export default function SubmitPage() {
     }
 
     if (!currentUser) {
-      setMessage("Please login before publishing intelligence.");
+      setMessage("Please login before publishing an update.");
       return;
     }
 
@@ -94,7 +94,7 @@ export default function SubmitPage() {
 
       setForm(emptyForm);
       setTouchedFields({});
-      setMessage("Intelligence published successfully.");
+      setMessage("Update published successfully.");
     } catch (error) {
       setMessage(error.message || "Something went wrong while publishing.");
     } finally {
@@ -122,7 +122,7 @@ export default function SubmitPage() {
           <Link href="/" className="text-sm font-semibold tracking-wide text-text">
             Inside Campus
           </Link>
-          <p className="hidden rounded-full border border-secondary/30 bg-text/[0.03] px-3 py-1.5 text-xs text-text/65 sm:block">
+          <p className="hidden rounded-full border border-secondary/30 bg-text/3 px-3 py-1.5 text-xs text-text/65 sm:block">
             Contributor workspace
           </p>
         </div>
@@ -131,10 +131,10 @@ export default function SubmitPage() {
       <section className="mx-auto max-w-6xl px-5 py-10 sm:px-6 sm:py-14 lg:px-8">
         <header className="max-w-3xl">
           <p className="mb-3 text-sm font-medium uppercase tracking-[0.18em] text-primary/80">
-            Submit Intelligence
+            Submit Update
           </p>
           <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-            Share Intelligence
+            Share an Update
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-text/68 sm:text-lg">
             Help juniors discover opportunities, deadlines, and insider academic guidance
@@ -254,7 +254,7 @@ export default function SubmitPage() {
                 disabled={submitButtonDisabled}
                 className="rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-background shadow-lg shadow-primary/20 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 sm:min-w-52"
               >
-                {isSaving ? "Publishing..." : "Publish Intelligence"}
+                {isSaving ? "Publishing..." : "Publish Update"}
               </button>
             </div>
 
@@ -270,7 +270,7 @@ export default function SubmitPage() {
               <h2 className="text-sm font-semibold">How this form works</h2>
               <div className="mt-4 space-y-3 text-sm leading-6 text-text/65">
                 <p>Fill the form fields on the left.</p>
-                <p>Click Publish Intelligence.</p>
+                <p>Click Publish Update.</p>
                 <p>The page sends this data to Firestore using createPost().</p>
               </div>
             </section>
@@ -281,7 +281,7 @@ export default function SubmitPage() {
                 {form.urgency ? <UrgencyBadge urgency={form.urgency} compact /> : null}
               </div>
               <p className="mt-4 text-sm font-medium leading-6 text-text/85">
-                {form.title || "Your intelligence title will appear here."}
+                {form.title || "Your update title will appear here."}
               </p>
               <p className="mt-2 text-sm leading-6 text-text/55">
                 {form.description ||
